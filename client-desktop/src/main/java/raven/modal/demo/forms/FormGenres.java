@@ -9,6 +9,7 @@ import raven.modal.demo.dto.response.ApiResponse;
 import raven.modal.demo.dto.response.GenreResponse;
 import raven.modal.demo.dto.response.MovieResponse;
 import raven.modal.demo.system.Form;
+import raven.modal.demo.system.FormManager;
 import raven.modal.demo.utils.SystemForm;
 
 import javax.imageio.ImageIO;
@@ -212,15 +213,17 @@ public class FormGenres extends Form {
         JLabel year = new JLabel("" + movie.getReleaseYear());
         year.putClientProperty(FlatClientProperties.STYLE, "foreground:$Label.disabledForeground;");
 
-        JButton btnPlay = new JButton("Xem phim");
-        btnPlay.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
-        btnPlay.setEnabled("PUBLISHED".equals(movie.getStatus()));
-        btnPlay.addActionListener(e -> playMovie(movie));
+        JButton btnDetail = new JButton("Chi tiết");
+        btnDetail.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
+        btnDetail.addActionListener(e -> {
+            FormMovieDetail detailForm = new FormMovieDetail(movie);
+            FormManager.showForm(detailForm);
+        });
 
         card.add(imgLabel, "growx");
         card.add(title, "growx");
         card.add(year, "growx");
-        card.add(btnPlay, "growx");
+        card.add(btnDetail, "growx");
 
         return card;
     }
@@ -288,12 +291,5 @@ public class FormGenres extends Form {
                 }
             }
         }.execute();
-    }
-
-    private void playMovie(MovieResponse movie) {
-        JOptionPane.showMessageDialog(this,
-                "Sẽ phát phim: " + movie.getTitle() + "\nURL: http://localhost:8080/api/hls/" + movie.getId() + "/master.m3u8",
-                "Play Movie",
-                JOptionPane.INFORMATION_MESSAGE);
     }
 }

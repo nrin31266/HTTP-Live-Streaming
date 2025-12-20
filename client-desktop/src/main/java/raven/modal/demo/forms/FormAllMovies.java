@@ -2,11 +2,14 @@ package raven.modal.demo.forms;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import raven.modal.ModalDialog;
 import raven.modal.Toast;
+import raven.modal.component.SimpleModalBorder;
 import raven.modal.demo.api.MovieApi;
 import raven.modal.demo.dto.response.ApiResponse;
 import raven.modal.demo.dto.response.MovieResponse;
 import raven.modal.demo.system.Form;
+import raven.modal.demo.system.FormManager;
 import raven.modal.demo.utils.SystemForm;
 
 import javax.imageio.ImageIO;
@@ -183,17 +186,19 @@ public class FormAllMovies extends Form {
                 "[light]background:tint($Panel.background,15%);" +
                 "[dark]background:tint($Panel.background,10%);");
 
-        JButton btnPlay = new JButton("Xem phim");
-        btnPlay.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
-        btnPlay.setEnabled("PUBLISHED".equals(movie.getStatus()));
-        btnPlay.addActionListener(e -> playMovie(movie));
+        JButton btnDetail = new JButton("Chi tiết");
+        btnDetail.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
+        btnDetail.addActionListener(e -> {
+            FormMovieDetail detailForm = new FormMovieDetail(movie);
+            FormManager.showForm(detailForm);
+        });
 
         card.add(imgLabel, "growx");
         card.add(title, "growx");
         card.add(genre, "split 2");
         card.add(year);
         card.add(status, "growx");
-        card.add(btnPlay, "growx");
+        card.add(btnDetail, "growx");
 
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
@@ -267,14 +272,6 @@ public class FormAllMovies extends Form {
                 }
             }
         }.execute();
-    }
-
-    private void playMovie(MovieResponse movie) {
-        // TODO: Implement video player
-        JOptionPane.showMessageDialog(this,
-                "Sẽ phát phim: " + movie.getTitle() + "\nURL: http://localhost:8080/api/hls/" + movie.getId() + "/master.m3u8",
-                "Play Movie",
-                JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void filterMovies() {
