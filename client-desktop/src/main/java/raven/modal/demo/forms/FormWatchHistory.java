@@ -263,6 +263,8 @@ public class FormWatchHistory extends Form {
         card.add(genre);
         card.add(buttonPanel, "growx");
 
+        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
         return card;
     }
 

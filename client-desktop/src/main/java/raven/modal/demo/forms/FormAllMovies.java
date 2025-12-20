@@ -5,8 +5,10 @@ import net.miginfocom.swing.MigLayout;
 import raven.modal.ModalDialog;
 import raven.modal.Toast;
 import raven.modal.component.SimpleModalBorder;
+import raven.modal.demo.api.GenreApi;
 import raven.modal.demo.api.MovieApi;
 import raven.modal.demo.dto.response.ApiResponse;
+import raven.modal.demo.dto.response.GenreResponse;
 import raven.modal.demo.dto.response.MovieResponse;
 import raven.modal.demo.system.Form;
 import raven.modal.demo.system.FormManager;
@@ -26,21 +28,31 @@ import java.util.Map;
 public class FormAllMovies extends Form {
 
     private JPanel gridPanel;
+    private JPanel genresPanel;
     private JScrollPane scrollPane;
-    private JTextField txtSearch;
     private JComboBox<String> cmbSort;
     private List<MovieResponse> movies = new ArrayList<>();
+    private List<GenreResponse> genres = new ArrayList<>();
+    private Long selectedGenreId = null;
     private Map<Long, ImageIcon> imageCache = new HashMap<>();
+    private Map<Long, JPanel> movieCardCache = new HashMap<>();
+    private Map<Long, JButton> genreButtons = new HashMap<>();
+    private JButton btnAllGenres;
 
     public FormAllMovies() {
         init();
     }
 
     private void init() {
-        setLayout(new MigLayout("wrap,fillx,insets 15", "[fill]", "[]10[fill]"));
+        setLayout(new MigLayout("wrap,fillx,insets 15", "[fill]", "[]10[]10[fill]"));
 
         // Header with search and sort
         add(createHeader());
+
+        // Genre chips
+        genresPanel = new JPanel(new MigLayout("insets 0,gap 8", "[]", "[]"));
+        genresPanel.putClientProperty(FlatClientProperties.STYLE, "background:null;");
+        add(genresPanel, "growx");
         
         // Grid panel for movies
         gridPanel = new JPanel(new MigLayout("fillx,wrap 4,gap 15", "[fill,sg][fill,sg][fill,sg][fill,sg]"));
@@ -60,39 +72,120 @@ public class FormAllMovies extends Form {
 
     @Override
     public void formInit() {
+        loadGenres();
         loadMovies();
     }
 
     @Override
     public void formRefresh() {
+        loadGenres();
         loadMovies();
     }
 
+    private void loadGenres() {
+        genresPanel.removeAll();
+        genresPanel.add(new JLabel("Đang tải thể loại..."));
+        genresPanel.revalidate();
+        genresPanel.repaint();
+
+        new SwingWorker<ApiResponse<List<GenreResponse>>, Void>() {
+            @Override
+            protected ApiResponse<List<GenreResponse>> doInBackground() {
+                return GenreApi.getAllGenres();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ApiResponse<List<GenreResponse>> response = get();
+                    if (response != null && response.getCode() == 200) {
+                        genres = response.getResult();
+                        createGenreChips();
+                    } else {
+                        genresPanel.removeAll();
+                        genresPanel.add(new JLabel("Lỗi tải thể loại"));
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                genresPanel.revalidate();
+                genresPanel.repaint();
+            }
+        }.execute();
+    }
+
+    private void createGenreChips() {
+        genresPanel.removeAll();
+        genreButtons.clear();
+
+        // "All" chip
+        btnAllGenres = new JButton("Tất cả");
+        styleChip(btnAllGenres, selectedGenreId == null);
+        btnAllGenres.addActionListener(e -> {
+            if (selectedGenreId != null) {
+                selectedGenreId = null;
+                updateGenreChipStyles();
+                filterMovies();
+            }
+        });
+        genresPanel.add(btnAllGenres);
+
+        for (GenreResponse genre : genres) {
+            JButton btn = new JButton(genre.getName());
+            styleChip(btn, selectedGenreId != null && selectedGenreId.equals(genre.getId()));
+            btn.addActionListener(e -> {
+                if (selectedGenreId == null || !selectedGenreId.equals(genre.getId())) {
+                    selectedGenreId = genre.getId();
+                    updateGenreChipStyles();
+                    filterMovies();
+                }
+            });
+            genreButtons.put(genre.getId(), btn);
+            genresPanel.add(btn);
+        }
+        genresPanel.revalidate();
+        genresPanel.repaint();
+    }
+
+    private void updateGenreChipStyles() {
+        styleChip(btnAllGenres, selectedGenreId == null);
+        for (Map.Entry<Long, JButton> entry : genreButtons.entrySet()) {
+            styleChip(entry.getValue(), selectedGenreId != null && selectedGenreId.equals(entry.getKey()));
+        }
+    }
+
+    private void styleChip(JButton btn, boolean isActive) {
+        if (isActive) {
+            btn.putClientProperty(FlatClientProperties.STYLE, "" +
+                    "arc:999;" +
+                    "margin:4,12,4,12;" +
+                    "borderWidth:2;" +
+                    "borderColor:#2196F3;" +
+                    "focusWidth:0;" +
+                    "innerFocusWidth:0;");
+        } else {
+            btn.putClientProperty(FlatClientProperties.STYLE, "" +
+                    "arc:999;" +
+                    "margin:4,12,4,12;" +
+                    "focusWidth:0;" +
+                    "innerFocusWidth:0;");
+        }
+    }
+
     private JPanel createHeader() {
-        JPanel panel = new JPanel(new MigLayout("fillx,insets 0", "[grow]10[]10[]", "[]"));
+        JPanel panel = new JPanel(new MigLayout("fillx,insets 0", "[grow]10[]", "[]"));
         panel.putClientProperty(FlatClientProperties.STYLE, "background:null;");
 
         JLabel title = new JLabel("Tất cả phim");
         title.putClientProperty(FlatClientProperties.STYLE, "font:bold +5;");
 
-        txtSearch = new JTextField();
-        txtSearch.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Tìm kiếm phim...");
-        txtSearch.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
-        txtSearch.addActionListener(e -> filterMovies());
-
         cmbSort = new JComboBox<>(new String[]{"Mới nhất", "Tên A-Z", "Năm phát hành"});
         cmbSort.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
         cmbSort.addActionListener(e -> sortMovies());
 
-        JButton btnRefresh = new JButton("Làm mới");
-        btnRefresh.putClientProperty(FlatClientProperties.STYLE, "arc:12;");
-        btnRefresh.addActionListener(e -> loadMovies());
-
         panel.add(title, "split 2,aligny center");
         panel.add(new JLabel("(" + movies.size() + " phim)"), "aligny center");
-        panel.add(txtSearch, "w 250!");
         panel.add(cmbSort, "w 150!");
-        panel.add(btnRefresh, "w 100!");
 
         return panel;
     }
@@ -100,6 +193,7 @@ public class FormAllMovies extends Form {
     private void loadMovies() {
         // Clear grid
         gridPanel.removeAll();
+        movieCardCache.clear(); // Clear cache when reloading all movies
         
         // Show loading
         JLabel loading = new JLabel("Đang tải phim...", SwingConstants.CENTER);
@@ -121,6 +215,9 @@ public class FormAllMovies extends Form {
                     ApiResponse<List<MovieResponse>> response = get();
                     if (response != null && response.getCode() == 200) {
                         movies = response.getResult();
+                        // Pre-create cards in background or just clear loading and let displayMovies handle it
+                        // For now, just clear loading
+                        gridPanel.removeAll();
                         displayMovies();
                         updateHeader();
                     } else {
@@ -137,12 +234,39 @@ public class FormAllMovies extends Form {
     private void displayMovies() {
         gridPanel.removeAll();
 
-        if (movies.isEmpty()) {
-            JLabel empty = new JLabel("Chưa có phim nào", SwingConstants.CENTER);
+        List<MovieResponse> filtered = new ArrayList<>();
+
+        for (MovieResponse m : movies) {
+            boolean matchGenre = selectedGenreId == null || (m.getGenre() != null && m.getGenre().getId().equals(selectedGenreId));
+
+            if (matchGenre) {
+                filtered.add(m);
+            }
+        }
+
+        // Sort
+        int sortIndex = cmbSort.getSelectedIndex();
+        filtered.sort((m1, m2) -> {
+            switch (sortIndex) {
+                case 0: // Mới nhất (ID desc)
+                    return Long.compare(m2.getId(), m1.getId());
+                case 1: // Tên A-Z
+                    return m1.getTitle().compareToIgnoreCase(m2.getTitle());
+                case 2: // Năm phát hành (Year desc)
+                    int y1 = m1.getReleaseYear() != null ? m1.getReleaseYear() : 0;
+                    int y2 = m2.getReleaseYear() != null ? m2.getReleaseYear() : 0;
+                    return Integer.compare(y2, y1);
+                default:
+                    return 0;
+            }
+        });
+
+        if (filtered.isEmpty()) {
+            JLabel empty = new JLabel("Không tìm thấy phim nào", SwingConstants.CENTER);
             empty.putClientProperty(FlatClientProperties.STYLE, "font:+2;foreground:$Label.disabledForeground;");
             gridPanel.add(empty, "span,grow");
         } else {
-            for (MovieResponse movie : movies) {
+            for (MovieResponse movie : filtered) {
                 gridPanel.add(createMovieCard(movie));
             }
         }
@@ -152,6 +276,10 @@ public class FormAllMovies extends Form {
     }
 
     private JPanel createMovieCard(MovieResponse movie) {
+        if (movieCardCache.containsKey(movie.getId())) {
+            return movieCardCache.get(movie.getId());
+        }
+
         JPanel card = new JPanel(new MigLayout("wrap,fillx,insets 12", "[fill]"));
         card.putClientProperty(FlatClientProperties.STYLE, "" +
                 "arc:16;" +
@@ -202,6 +330,7 @@ public class FormAllMovies extends Form {
 
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
+        movieCardCache.put(movie.getId(), card);
         return card;
     }
 
@@ -275,9 +404,7 @@ public class FormAllMovies extends Form {
     }
 
     private void filterMovies() {
-        String search = txtSearch.getText().toLowerCase().trim();
-        displayMovies(); // Will re-filter based on search
-        // TODO: Implement actual filtering
+        displayMovies();
     }
 
     private void sortMovies() {
@@ -289,6 +416,7 @@ public class FormAllMovies extends Form {
         // Rebuild header to update count
         removeAll();
         add(createHeader());
+        add(genresPanel, "growx");
         add(scrollPane, "grow");
         revalidate();
         repaint();
