@@ -1,19 +1,19 @@
 package raven.modal.demo.model;
 
 public class Genre {
-    private String id;
+    private Long id;
     private String name;
 
-    public Genre(String id, String name) {
+    public Genre(Long id, String name) {
         this.id = id;
         this.name = name;
     }
 
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

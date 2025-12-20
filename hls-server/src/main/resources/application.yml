@@ -18,3 +18,8 @@ server:
 app:
   jwt:
     signerKey: HDKdDVDEpABtpunTzN2QM2pbmVzDP5jht6WGykegNKgsKDVdDlbzFVmU1vDOVOHV
+  hls:
+    storage-path: /home/nrin31266/hls-data/videos/hls
+  ffmpeg:
+    use-cuda: true
+    segment-duration: 6

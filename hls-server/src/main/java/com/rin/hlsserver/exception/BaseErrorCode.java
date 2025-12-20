@@ -21,6 +21,11 @@ public enum BaseErrorCode implements ErrorCode {
     GENRE_NOT_FOUND(9100, "Genre not found", HttpStatus.NOT_FOUND),
     GENRE_ALREADY_EXISTS(9101, "Genre ID already exists", HttpStatus.CONFLICT),
 
+    // 🔹 Movie errors
+    MOVIE_NOT_FOUND(9200, "Movie not found", HttpStatus.NOT_FOUND),
+    MOVIE_ALREADY_EXISTS(9201, "Movie already exists", HttpStatus.CONFLICT),
+    MOVIE_PROCESSING(9202, "Movie is currently being processed", HttpStatus.CONFLICT),
+
     ;
 
 

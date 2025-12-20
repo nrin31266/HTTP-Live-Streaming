@@ -4,9 +4,13 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
 import raven.modal.ModalDialog;
+import raven.modal.Toast;
 import raven.modal.component.SimpleModalBorder;
+import raven.modal.demo.api.MovieApi;
+import raven.modal.demo.dto.request.MovieRequest;
+import raven.modal.demo.dto.response.ApiResponse;
+import raven.modal.demo.dto.response.MovieResponse;
 import raven.modal.demo.model.Genre;
-import raven.modal.demo.model.Movie;
 import raven.modal.demo.system.Form;
 import raven.modal.demo.utils.GenreManager;
 import raven.modal.demo.utils.SystemForm;
@@ -21,12 +25,13 @@ import java.time.Year;
 import java.util.ArrayList;
 import java.util.List;
 
-@SystemForm(name = "Movie Management", description = "Quản lý danh sách phim")
+@SystemForm(name = "Movie Management", description = "Quản lý danh sách phim với FFmpeg HLS processing")
 public class FormMovieManagement extends Form {
 
     private JTable table;
     private DefaultTableModel tableModel;
-    private List<Movie> movies;
+    private List<MovieResponse> movies = new ArrayList<>();
+    private javax.swing.Timer refreshTimer;
 
     public FormMovieManagement() {
         init();
@@ -35,7 +40,7 @@ public class FormMovieManagement extends Form {
     private void init() {
         setLayout(new MigLayout("fillx,wrap,insets 15", "[fill]", "[][fill,grow]"));
 
-        // Header với nút thêm phim
+        // Header
         JPanel headerPanel = new JPanel(new MigLayout("fillx,insets 0", "[]push[]"));
 
         JLabel title = new JLabel("Quản Lý Phim");
@@ -46,33 +51,35 @@ public class FormMovieManagement extends Form {
         btnAdd.setIcon(new FlatSVGIcon("raven/modal/demo/icons/add.svg", 0.5f));
         btnAdd.addActionListener(e -> showAddMovieDialog());
 
+        JButton btnRefresh = new JButton("Làm Mới");
+        btnRefresh.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        btnRefresh.addActionListener(e -> loadMovies());
+
         headerPanel.add(title);
+        headerPanel.add(btnRefresh);
         headerPanel.add(btnAdd);
 
         // Table
-        String[] columns = {"ID", "Tên Phim", "Thể Loại", "Năm", "Thời Lượng", "Trạng Thái", "Hành Động"};
+        String[] columns = {"ID", "Tên Phim", "Thể Loại", "Năm", "Thời Lượng", "Trạng Thái", "Progress", "Hành Động"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 6; // Chỉ cột hành động có thể click
+                return column == 7; // Chỉ cột hành động
             }
         };
 
         table = new JTable(tableModel);
-        table.setRowHeight(40);
-        table.getTableHeader().putClientProperty(FlatClientProperties.STYLE,
-                "height:40;font:bold;");
+        table.setRowHeight(45);
+        table.getTableHeader().putClientProperty(FlatClientProperties.STYLE, "height:40;font:bold;");
         table.putClientProperty(FlatClientProperties.STYLE,
-                "showHorizontalLines:true;" +
-                        "intercellSpacing:0,1;" +
-                        "showVerticalLines:false;");
+                "showHorizontalLines:true;intercellSpacing:0,1;showVerticalLines:false;");
 
-        // Renderer cho các cột
+        // Renderers
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
-        table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer); // ID
-        table.getColumnModel().getColumn(3).setCellRenderer(centerRenderer); // Năm
-        table.getColumnModel().getColumn(4).setCellRenderer(centerRenderer); // Thời lượng
+        table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
+        table.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
+        table.getColumnModel().getColumn(4).setCellRenderer(centerRenderer);
 
         // Status renderer với màu sắc
         table.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
@@ -84,10 +91,12 @@ public class FormMovieManagement extends Form {
                 label.setHorizontalAlignment(SwingConstants.CENTER);
 
                 String status = value.toString();
-                if ("published".equals(status)) {
+                if (status.contains("Đã xuất bản") || status.contains("PUBLISHED")) {
                     label.setForeground(new Color(34, 197, 94)); // green
-                } else if ("processing".equals(status)) {
+                } else if (status.contains("Đang xử lý") || status.contains("PROCESSING")) {
                     label.setForeground(new Color(234, 179, 8)); // yellow
+                } else if (status.contains("Thất bại") || status.contains("FAILED")) {
+                    label.setForeground(new Color(239, 68, 68)); // red
                 } else {
                     label.setForeground(new Color(156, 163, 175)); // gray
                 }
@@ -95,18 +104,22 @@ public class FormMovieManagement extends Form {
             }
         });
 
-        // Action column với nút
-        table.getColumnModel().getColumn(6).setCellRenderer(new ActionButtonRenderer());
-        table.getColumnModel().getColumn(6).setCellEditor(new ActionButtonEditor());
+        // Progress bar renderer
+        table.getColumnModel().getColumn(6).setCellRenderer(new ProgressBarRenderer());
 
-        // Đặt độ rộng cột
+        // Action column
+        table.getColumnModel().getColumn(7).setCellRenderer(new ActionButtonRenderer());
+        table.getColumnModel().getColumn(7).setCellEditor(new ActionButtonEditor());
+
+        // Column widths
         table.getColumnModel().getColumn(0).setPreferredWidth(50);
         table.getColumnModel().getColumn(1).setPreferredWidth(250);
         table.getColumnModel().getColumn(2).setPreferredWidth(100);
         table.getColumnModel().getColumn(3).setPreferredWidth(70);
         table.getColumnModel().getColumn(4).setPreferredWidth(100);
-        table.getColumnModel().getColumn(5).setPreferredWidth(100);
-        table.getColumnModel().getColumn(6).setPreferredWidth(150);
+        table.getColumnModel().getColumn(5).setPreferredWidth(120);
+        table.getColumnModel().getColumn(6).setPreferredWidth(100);
+        table.getColumnModel().getColumn(7).setPreferredWidth(180);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createCompoundBorder(
@@ -116,6 +129,16 @@ public class FormMovieManagement extends Form {
 
         add(headerPanel);
         add(scrollPane, "grow");
+
+        // Auto refresh mỗi 5s để cập nhật progress
+        refreshTimer = new javax.swing.Timer(5000, e -> {
+            boolean hasProcessing = movies.stream()
+                    .anyMatch(m -> "PROCESSING".equals(m.getStatus()));
+            if (hasProcessing) {
+                loadMovies();
+            }
+        });
+        refreshTimer.start();
     }
 
     @Override
@@ -124,42 +147,34 @@ public class FormMovieManagement extends Form {
     }
 
     private void loadMovies() {
-        // Dữ liệu tĩnh mẫu
-        movies = new ArrayList<>();
-        movies.add(new Movie(1, "Nhà Tù Shawshank", "Hai tù nhân tạo nên tình bạn qua nhiều năm",
-                "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg",
-                "/videos/shawshank.m3u8", 142, 5, 1994, "drama", "published"));
-        movies.add(new Movie(2, "Bố Già", "Ông trùm mafia già nua của một gia đình tội phạm",
-                "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
-                "/videos/godfather.m3u8", 175, 10, 1972, "crime", "published"));
-        movies.add(new Movie(3, "Kỵ Sĩ Bóng Đêm", "Batman đối đầu với Joker",
-                "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
-                "/videos/darkknight.m3u8", 152, 8, 2008, "action", "published"));
-        movies.add(new Movie(4, "Pulp Fiction", "Cuộc sống của hai sát thủ mafia",
-                "https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg",
-                "/videos/pulpfiction.m3u8", 154, 0, 1994, "crime", "published"));
-        movies.add(new Movie(5, "Kẻ Cắp Giấc Mơ", "Tên trộm đánh cắp bí mật qua giấc mơ",
-                "https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg",
-                "/videos/inception.m3u8", 148, 15, 2010, "sci-fi", "processing"));
-        movies.add(new Movie(6, "Câu Lạc Bộ Chiến Đấu", "Nhân viên văn phòng mất ngủ",
-                "https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
-                "/videos/fightclub.m3u8", 139, 0, 1999, "drama", "draft"));
+        new SwingWorker<ApiResponse<List<MovieResponse>>, Void>() {
+            @Override
+            protected ApiResponse<List<MovieResponse>> doInBackground() {
+                return MovieApi.getAllMovies();
+            }
 
-        refreshTable();
+            @Override
+            protected void done() {
+                try {
+                    ApiResponse<List<MovieResponse>> response = get();
+                    if (response != null && response.getCode() == 200 && response.getResult() != null) {
+                        movies = response.getResult();
+                        refreshTable();
+                    } else {
+                        Toast.show(FormMovieManagement.this, Toast.Type.ERROR,
+                                "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                    }
+                } catch (Exception ex) {
+                    Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi load movies: " + ex.getMessage());
+                }
+            }
+        }.execute();
     }
 
     private void refreshTable() {
         tableModel.setRowCount(0);
-        for (Movie movie : movies) {
-            // Tìm tên tiếng Việt của genre
-            String genreName = movie.getGenre();
-            Genre[] genreArray = GenreManager.getInstance().getGenreArray();
-            for (Genre g : genreArray) {
-                if (g.getId().equals(movie.getGenre())) {
-                    genreName = g.getName();
-                    break;
-                }
-            }
+        for (MovieResponse movie : movies) {
+            String genreName = movie.getGenre() != null ? movie.getGenre().getName() : "N/A";
 
             tableModel.addRow(new Object[]{
                     movie.getId(),
@@ -167,8 +182,9 @@ public class FormMovieManagement extends Form {
                     genreName,
                     movie.getReleaseYear(),
                     movie.getDurationDisplay(),
-                    movie.getStatus(),
-                    movie // Pass movie object for action buttons
+                    movie.getStatusDisplay(),
+                    movie.getProcessingProgress() != null ? movie.getProcessingProgress() : 0,
+                    movie // Pass movie object
             });
         }
     }
@@ -186,21 +202,20 @@ public class FormMovieManagement extends Form {
         JScrollPane scrollDesc = new JScrollPane(txtDescription);
 
         JTextField txtImageUrl = new JTextField();
-        JTextField txtVideoUrl = new JTextField();
+        JTextField txtSourcePath = new JTextField();
         JTextField txtDuration = new JTextField();
         JTextField txtProcessingMinutes = new JTextField("0");
         int currentYear = Year.now().getValue();
-        JSpinner spinYear = new JSpinner(new SpinnerNumberModel(currentYear, 1900, 2100, 1));
+        JSpinner spinYear = new JSpinner(new SpinnerNumberModel(Integer.valueOf(currentYear), Integer.valueOf(1900), Integer.valueOf(2100), Integer.valueOf(1)));
         JComboBox<Genre> cboGenre = new JComboBox<>(GenreManager.getInstance().getGenreArray());
-        JComboBox<String> cboStatus = new JComboBox<>(new String[]{"draft", "processing", "published"});
 
-        // Style cho các components
+        // Placeholders
         txtTitle.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Nhập tên phim");
         txtDescription.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Mô tả phim");
         txtImageUrl.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "https://example.com/image.jpg");
-        txtVideoUrl.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "/videos/movie.m3u8");
+        txtSourcePath.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "/path/to/source/video.mp4");
         txtDuration.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "142 (phút)");
-        txtProcessingMinutes.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "0 = không xử lý");
+        txtProcessingMinutes.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "0=skip, >0=xử lý");
 
         panel.add(lblTitle, "span 2,center,gapbottom 15");
         panel.add(new JLabel("Tên Phim:"));
@@ -209,8 +224,8 @@ public class FormMovieManagement extends Form {
         panel.add(scrollDesc);
         panel.add(new JLabel("Image URL:"));
         panel.add(txtImageUrl);
-        panel.add(new JLabel("Video URL:"));
-        panel.add(txtVideoUrl);
+        panel.add(new JLabel("Source Video Path:"));
+        panel.add(txtSourcePath);
         panel.add(new JLabel("Thời Lượng (phút):"));
         panel.add(txtDuration);
         panel.add(new JLabel("Xử Lý Video (phút):"));
@@ -219,61 +234,116 @@ public class FormMovieManagement extends Form {
         panel.add(spinYear);
         panel.add(new JLabel("Thể Loại:"));
         panel.add(cboGenre);
-        panel.add(new JLabel("Trạng Thái:"));
-        panel.add(cboStatus);
 
         Option option = ModalDialog.createOption();
-        option.getLayoutOption().setSize(500, -1)
+        option.getLayoutOption().setSize(520, -1)
                 .setLocation(Location.CENTER, Location.CENTER)
                 .setAnimateDistance(0.7f, 0);
 
         ModalDialog.showModal(this, new SimpleModalBorder(
-                panel, "Thêm Phim Mới", SimpleModalBorder.YES_NO_OPTION,
+                panel, "Thêm Phim", SimpleModalBorder.YES_NO_OPTION,
                 (controller, action) -> {
                     if (action == SimpleModalBorder.YES_OPTION) {
-                        // Validate
                         if (txtTitle.getText().trim().isEmpty()) {
                             controller.consume();
-                            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên phim!",
-                                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+                            Toast.show(FormMovieManagement.this, Toast.Type.WARNING, "Vui lòng nhập tên phim!");
                             return;
                         }
 
                         try {
-                            // Tạo movie mới
-                            Movie movie = new Movie();
-                            movie.setId(movies.size() + 1);
-                            movie.setTitle(txtTitle.getText().trim());
-                            movie.setDescription(txtDescription.getText().trim());
-                            movie.setImageUrl(txtImageUrl.getText().trim());
-                            movie.setVideoUrl(txtVideoUrl.getText().trim());
-                            movie.setDuration(Integer.parseInt(txtDuration.getText().trim()));
-                            movie.setProcessingMinutes(Integer.parseInt(txtProcessingMinutes.getText().trim()));
-                            movie.setReleaseYear((Integer) spinYear.getValue());
                             Genre selectedGenre = (Genre) cboGenre.getSelectedItem();
-                            movie.setGenre(selectedGenre != null ? selectedGenre.getId() : "");
-                            movie.setStatus(cboStatus.getSelectedItem().toString());
-
-                            movies.add(movie);
-                            refreshTable();
-
-                            String msg = "Đã thêm phim thành công!";
-                            if (movie.getProcessingMinutes() > 0) {
-                                msg += "\n(Backend sẽ xử lý " + movie.getProcessingMinutes() + " phút video với FFmpeg)";
+                            if (selectedGenre == null) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.WARNING, "Vui lòng chọn thể loại!");
+                                return;
                             }
-                            JOptionPane.showMessageDialog(this, msg,
-                                    "Thành Công", JOptionPane.INFORMATION_MESSAGE);
 
-                        } catch (NumberFormatException e) {
+                            // Validate fields
+                            if (txtDuration.getText().trim().isEmpty()) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.WARNING, "Vui lòng nhập thời lượng!");
+                                return;
+                            }
+
+                            int duration, processingMinutes;
+                            try {
+                                duration = Integer.parseInt(txtDuration.getText().trim());
+                            } catch (NumberFormatException e) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Thời lượng phải là số nguyên hợp lệ!");
+                                return;
+                            }
+
+                            try {
+                                processingMinutes = Integer.parseInt(txtProcessingMinutes.getText().trim());
+                            } catch (NumberFormatException e) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Số phút xử lý phải là số nguyên hợp lệ!");
+                                return;
+                            }
+
+                            MovieRequest request = MovieRequest.builder()
+                                    .title(txtTitle.getText().trim())
+                                    .description(txtDescription.getText().trim())
+                                    .imageUrl(txtImageUrl.getText().trim())
+                                    .sourceVideoPath(txtSourcePath.getText().trim())
+                                    .duration(duration)
+                                    .processingMinutes(processingMinutes)
+                                    .releaseYear((Integer) spinYear.getValue())
+                                    .genreId(selectedGenre.getId())
+                                    .build();
+
+                            // Dialog đóng ngay, chạy API trong background
+                            Toast.show(FormMovieManagement.this, Toast.Type.INFO, "Đang tạo phim...");
+                            
+                            new SwingWorker<ApiResponse<MovieResponse>, Void>() {
+                                @Override
+                                protected ApiResponse<MovieResponse> doInBackground() {
+                                    return MovieApi.createMovie(request);
+                                }
+
+                                @Override
+                                protected void done() {
+                                    try {
+                                        ApiResponse<MovieResponse> response = get();
+                                        if (response != null && response.getCode() == 200) {
+                                            MovieResponse newMovie = response.getResult();
+                                            
+                                            // Thêm movie ngay, UI update tức thì
+                                            SwingUtilities.invokeLater(() -> {
+                                                movies.add(0, newMovie);
+                                                refreshTable();
+                                                table.revalidate();
+                                                table.repaint();
+                                            });
+                                            
+                                            Toast.show(FormMovieManagement.this, Toast.Type.SUCCESS, "Thêm phim thành công!");
+                                            
+                                            if (request.getProcessingMinutes() > 0) {
+                                                Toast.show(FormMovieManagement.this, Toast.Type.INFO,
+                                                        "Video đang được xử lý với FFmpeg (CUDA)...");
+                                            }
+                                            
+                                            // Timer 2s sẽ tự động refresh progress
+                                        } else {
+                                            Toast.show(FormMovieManagement.this, Toast.Type.ERROR,
+                                                    "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                                        }
+                                    } catch (Exception e) {
+                                        Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + e.getMessage());
+                                    }
+                                }
+                            }.execute();
+                        } catch (Exception e) {
                             controller.consume();
-                            JOptionPane.showMessageDialog(this, "Thời lượng phải là số!",
-                                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+                           e.printStackTrace();
+                            Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + e.getMessage());
                         }
                     }
                 }), option);
     }
 
-    private void showEditMovieDialog(Movie movie) {
+    private void showEditMovieDialog(MovieResponse movie) {
         JPanel panel = new JPanel(new MigLayout("fillx,wrap,insets 20", "[right]15[fill,300]"));
 
         JLabel lblTitle = new JLabel("Chỉnh Sửa Phim");
@@ -286,23 +356,21 @@ public class FormMovieManagement extends Form {
         JScrollPane scrollDesc = new JScrollPane(txtDescription);
 
         JTextField txtImageUrl = new JTextField(movie.getImageUrl());
-        JTextField txtVideoUrl = new JTextField(movie.getVideoUrl());
+        JTextField txtSourcePath = new JTextField(movie.getSourceVideoPath());
         JTextField txtDuration = new JTextField(movie.getDuration().toString());
-        JTextField txtProcessingMinutes = new JTextField(movie.getProcessingMinutes() != null ?
-                movie.getProcessingMinutes().toString() : "0");
-        int releaseYear = movie.getReleaseYear() != null ? movie.getReleaseYear() : Year.now().getValue();
-        JSpinner spinYear = new JSpinner(new SpinnerNumberModel(releaseYear, 1900, 2100, 1));
+        JTextField txtProcessingMinutes = new JTextField(movie.getProcessingMinutes().toString());
+        JSpinner spinYear = new JSpinner(new SpinnerNumberModel(Integer.valueOf(movie.getReleaseYear()), Integer.valueOf(1900), Integer.valueOf(2100), Integer.valueOf(1)));
+
         JComboBox<Genre> cboGenre = new JComboBox<>(GenreManager.getInstance().getGenreArray());
-        // Tìm và select genre hiện tại
-        Genre[] genreArray = GenreManager.getInstance().getGenreArray();
-        for (Genre g : genreArray) {
-            if (g.getId().equals(movie.getGenre())) {
-                cboGenre.setSelectedItem(g);
-                break;
+        if (movie.getGenre() != null) {
+            Genre[] genres = GenreManager.getInstance().getGenreArray();
+            for (Genre g : genres) {
+                if (g.getId().equals(movie.getGenre().getId())) {
+                    cboGenre.setSelectedItem(g);
+                    break;
+                }
             }
         }
-        JComboBox<String> cboStatus = new JComboBox<>(new String[]{"draft", "processing", "published"});
-        cboStatus.setSelectedItem(movie.getStatus());
 
         panel.add(lblTitle, "span 2,center,gapbottom 15");
         panel.add(new JLabel("Tên Phim:"));
@@ -311,8 +379,8 @@ public class FormMovieManagement extends Form {
         panel.add(scrollDesc);
         panel.add(new JLabel("Image URL:"));
         panel.add(txtImageUrl);
-        panel.add(new JLabel("Video URL:"));
-        panel.add(txtVideoUrl);
+        panel.add(new JLabel("Source Video Path:"));
+        panel.add(txtSourcePath);
         panel.add(new JLabel("Thời Lượng (phút):"));
         panel.add(txtDuration);
         panel.add(new JLabel("Xử Lý Video (phút):"));
@@ -321,11 +389,9 @@ public class FormMovieManagement extends Form {
         panel.add(spinYear);
         panel.add(new JLabel("Thể Loại:"));
         panel.add(cboGenre);
-        panel.add(new JLabel("Trạng Thái:"));
-        panel.add(cboStatus);
 
         Option option = ModalDialog.createOption();
-        option.getLayoutOption().setSize(500, -1)
+        option.getLayoutOption().setSize(520, -1)
                 .setLocation(Location.CENTER, Location.CENTER)
                 .setAnimateDistance(0.7f, 0);
 
@@ -335,70 +401,224 @@ public class FormMovieManagement extends Form {
                     if (action == SimpleModalBorder.YES_OPTION) {
                         if (txtTitle.getText().trim().isEmpty()) {
                             controller.consume();
-                            JOptionPane.showMessageDialog(this, "Vui lòng nhập tên phim!",
-                                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+                            Toast.show(FormMovieManagement.this, Toast.Type.WARNING, "Vui lòng nhập tên phim!");
                             return;
                         }
 
                         try {
-                            movie.setTitle(txtTitle.getText().trim());
-                            movie.setDescription(txtDescription.getText().trim());
-                            movie.setImageUrl(txtImageUrl.getText().trim());
-                            movie.setVideoUrl(txtVideoUrl.getText().trim());
-                            movie.setDuration(Integer.parseInt(txtDuration.getText().trim()));
-                            movie.setProcessingMinutes(Integer.parseInt(txtProcessingMinutes.getText().trim()));
-                            movie.setReleaseYear((Integer) spinYear.getValue());
                             Genre selectedGenre = (Genre) cboGenre.getSelectedItem();
-                            movie.setGenre(selectedGenre != null ? selectedGenre.getId() : "");
-                            movie.setStatus(cboStatus.getSelectedItem().toString());
 
-                            refreshTable();
-                            JOptionPane.showMessageDialog(this, "Đã cập nhật phim thành công!",
-                                    "Thành Công", JOptionPane.INFORMATION_MESSAGE);
+                            // Validate fields
+                            if (txtDuration.getText().trim().isEmpty()) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.WARNING, "Vui lòng nhập thời lượng!");
+                                return;
+                            }
 
-                        } catch (NumberFormatException e) {
+                            int duration, processingMinutes;
+                            try {
+                                duration = Integer.parseInt(txtDuration.getText().trim());
+                            } catch (NumberFormatException e) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Thời lượng phải là số nguyên hợp lệ!");
+                                return;
+                            }
+
+                            try {
+                                processingMinutes = Integer.parseInt(txtProcessingMinutes.getText().trim());
+                            } catch (NumberFormatException e) {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Số phút xử lý phải là số nguyên hợp lệ!");
+                                return;
+                            }
+
+                            MovieRequest request = MovieRequest.builder()
+                                    .title(txtTitle.getText().trim())
+                                    .description(txtDescription.getText().trim())
+                                    .imageUrl(txtImageUrl.getText().trim())
+                                    .sourceVideoPath(txtSourcePath.getText().trim())
+                                    .duration(duration)
+                                    .processingMinutes(processingMinutes)
+                                    .releaseYear((Integer) spinYear.getValue())
+                                    .genreId(selectedGenre.getId())
+                                    .build();
+
+                            // Dialog sẽ đóng ngay khi callback return
+                            // Chạy API call SAU KHI dialog đã đóng
+                            SwingUtilities.invokeLater(() -> {
+                                Toast.show(FormMovieManagement.this, Toast.Type.INFO, "Đang cập nhật...");
+                                
+                                new SwingWorker<ApiResponse<MovieResponse>, Void>() {
+                                    @Override
+                                    protected ApiResponse<MovieResponse> doInBackground() {
+                                        return MovieApi.updateMovie(movie.getId(), request);
+                                    }
+
+                                    @Override
+                                    protected void done() {
+                                        try {
+                                            ApiResponse<MovieResponse> response = get();
+                                            if (response != null && response.getCode() == 200) {
+                                                MovieResponse updatedMovie = response.getResult();
+                                                
+                                                // Cập nhật movie trong list ngay lập tức
+                                                SwingUtilities.invokeLater(() -> {
+                                                    for (int i = 0; i < movies.size(); i++) {
+                                                        if (movies.get(i).getId().equals(updatedMovie.getId())) {
+                                                            movies.set(i, updatedMovie);
+                                                            break;
+                                                        }
+                                                    }
+                                                    refreshTable();
+                                                    table.revalidate();
+                                                    table.repaint();
+                                                });
+                                                
+                                                Toast.show(FormMovieManagement.this, Toast.Type.SUCCESS, "Cập nhật phim thành công!");
+                                                
+                                                // Timer 2s sẽ tự động refresh khi có PROCESSING
+                                            } else {
+                                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR,
+                                                        "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                                            }
+                                        } catch (Exception e) {
+                                            Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + e.getMessage());
+                                        }
+                                    }
+                                }.execute();
+                            });
+                        } catch (Exception e) {
                             controller.consume();
-                            JOptionPane.showMessageDialog(this, "Thời lượng phải là số!",
-                                    "Lỗi", JOptionPane.ERROR_MESSAGE);
+                            Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + e.getMessage());
                         }
                     }
                 }), option);
     }
 
-    private void deleteMovie(Movie movie) {
-        int result = JOptionPane.showConfirmDialog(this,
-                "Bạn có chắc muốn xóa phim \"" + movie.getTitle() + "\"?",
-                "Xác Nhận Xóa",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
+    private void deleteMovie(MovieResponse movie) {
+        JLabel message = new JLabel("<html><div style='text-align:center;padding:20px;'>" +
+                "Bạn có chắc muốn xóa phim<br><b>" + movie.getTitle() + "</b>?<br>" +
+                "<span style='color:red;'>Video files sẽ bị xóa vĩnh viễn!</span></div></html>");
+        message.setHorizontalAlignment(SwingConstants.CENTER);
 
-        if (result == JOptionPane.YES_OPTION) {
-            movies.remove(movie);
-            refreshTable();
-            JOptionPane.showMessageDialog(this, "Đã xóa phim thành công!",
-                    "Thành Công", JOptionPane.INFORMATION_MESSAGE);
+        Option option = ModalDialog.createOption();
+        option.getLayoutOption().setSize(400, -1)
+                .setLocation(Location.CENTER, Location.CENTER)
+                .setAnimateDistance(0.7f, 0);
+
+        ModalDialog.showModal(this, new SimpleModalBorder(
+                message, "Xác Nhận Xóa", SimpleModalBorder.YES_NO_OPTION,
+                (controller, action) -> {
+                    if (action == SimpleModalBorder.YES_OPTION) {
+                        try {
+                            ApiResponse<Void> response = MovieApi.deleteMovie(movie.getId());
+                            if (response != null && response.getCode() == 200) {
+                                Toast.show(FormMovieManagement.this, Toast.Type.SUCCESS, "Xóa phim thành công!");
+                                loadMovies();
+                            } else {
+                                controller.consume();
+                                Toast.show(FormMovieManagement.this, Toast.Type.ERROR,
+                                        "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                            }
+                        } catch (Exception ex) {
+                            controller.consume();
+                            Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + ex.getMessage());
+                        }
+                    }
+                }), option);
+    }
+
+    private void reprocessMovie(MovieResponse movie) {
+        if ("PROCESSING".equals(movie.getStatus())) {
+            Toast.show(this, Toast.Type.WARNING, "Phim đang được xử lý!");
+            return;
+        }
+
+        // Chạy API call ngay
+        Toast.show(this, Toast.Type.INFO, "Đang gửi yêu cầu xử lý lại...");
+
+        new SwingWorker<ApiResponse<MovieResponse>, Void>() {
+            @Override
+            protected ApiResponse<MovieResponse> doInBackground() {
+                return MovieApi.reprocessMovie(movie.getId());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ApiResponse<MovieResponse> response = get();
+                    if (response != null && response.getCode() == 200) {
+                        MovieResponse updatedMovie = response.getResult();
+                        
+                        // Cập nhật movie trong list ngay lập tức
+                        SwingUtilities.invokeLater(() -> {
+                            for (int i = 0; i < movies.size(); i++) {
+                                if (movies.get(i).getId().equals(updatedMovie.getId())) {
+                                    movies.set(i, updatedMovie);
+                                    break;
+                                }
+                            }
+                            refreshTable();
+                            table.revalidate();
+                            table.repaint();
+                        });
+                        
+                        Toast.show(FormMovieManagement.this, Toast.Type.SUCCESS, "Bắt đầu xử lý lại video!");
+                        
+                        // Timer 2s sẽ tự động refresh khi có PROCESSING
+                    } else {
+                        Toast.show(FormMovieManagement.this, Toast.Type.ERROR,
+                                "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                    }
+                } catch (Exception ex) {
+                    Toast.show(FormMovieManagement.this, Toast.Type.ERROR, "Lỗi: " + ex.getMessage());
+                }
+            }
+        }.execute();
+    }
+
+
+    // Progress Bar Renderer
+    private class ProgressBarRenderer extends JProgressBar implements javax.swing.table.TableCellRenderer {
+        public ProgressBarRenderer() {
+            super(0, 100);
+            setStringPainted(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                                                       boolean isSelected, boolean hasFocus, int row, int column) {
+            int progress = value instanceof Integer ? (Integer) value : 0;
+            setValue(progress);
+            setString(progress + "%");
+            return this;
         }
     }
 
-    // Renderer cho cột hành động
+    // Action Button Renderer
     private class ActionButtonRenderer extends JPanel implements javax.swing.table.TableCellRenderer {
         private final JButton btnEdit;
         private final JButton btnDelete;
+        private final JButton btnReprocess;
 
         public ActionButtonRenderer() {
-            setLayout(new FlowLayout(FlowLayout.CENTER, 5, 2));
-            setOpaque(true);
+            setLayout(new FlowLayout(FlowLayout.CENTER, 3, 2));
 
             btnEdit = new JButton("Sửa");
-            btnEdit.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,8,2,8");
+            btnEdit.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
             btnEdit.setIcon(new FlatSVGIcon("raven/modal/demo/icons/edit.svg", 0.35f));
 
             btnDelete = new JButton("Xóa");
-            btnDelete.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,8,2,8");
+            btnDelete.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
             btnDelete.setIcon(new FlatSVGIcon("raven/modal/demo/icons/delete.svg", 0.35f));
+
+            btnReprocess = new JButton("↻");
+            btnReprocess.setToolTipText("Xử lý lại video");
+            btnReprocess.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
 
             add(btnEdit);
             add(btnDelete);
+            add(btnReprocess);
         }
 
         @Override
@@ -413,18 +633,19 @@ public class FormMovieManagement extends Form {
         }
     }
 
-    // Editor cho cột hành động
+    // Action Button Editor
     private class ActionButtonEditor extends AbstractCellEditor implements javax.swing.table.TableCellEditor {
         private final JPanel panel;
         private final JButton btnEdit;
         private final JButton btnDelete;
-        private Movie currentMovie;
+        private final JButton btnReprocess;
+        private MovieResponse currentMovie;
 
         public ActionButtonEditor() {
-            panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 2));
+            panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 3, 2));
 
             btnEdit = new JButton("Sửa");
-            btnEdit.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,8,2,8");
+            btnEdit.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
             btnEdit.setIcon(new FlatSVGIcon("raven/modal/demo/icons/edit.svg", 0.35f));
             btnEdit.addActionListener(e -> {
                 fireEditingStopped();
@@ -432,21 +653,30 @@ public class FormMovieManagement extends Form {
             });
 
             btnDelete = new JButton("Xóa");
-            btnDelete.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,8,2,8");
+            btnDelete.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
             btnDelete.setIcon(new FlatSVGIcon("raven/modal/demo/icons/delete.svg", 0.35f));
             btnDelete.addActionListener(e -> {
                 fireEditingStopped();
                 deleteMovie(currentMovie);
             });
 
+            btnReprocess = new JButton("↻");
+            btnReprocess.setToolTipText("Xử lý lại video");
+            btnReprocess.putClientProperty(FlatClientProperties.STYLE, "arc:5;border:2,6,2,6");
+            btnReprocess.addActionListener(e -> {
+                fireEditingStopped();
+                reprocessMovie(currentMovie);
+            });
+
             panel.add(btnEdit);
             panel.add(btnDelete);
+            panel.add(btnReprocess);
         }
 
         @Override
         public Component getTableCellEditorComponent(JTable table, Object value,
                                                      boolean isSelected, int row, int column) {
-            currentMovie = (Movie) value;
+            currentMovie = (MovieResponse) value;
             return panel;
         }
 

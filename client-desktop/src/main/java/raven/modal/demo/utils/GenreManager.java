@@ -40,7 +40,7 @@ public class GenreManager {
                 genreResponses = response.getResult();
                 // Convert sang Genre model để dùng cho ComboBox
                 genres = genreResponses.stream()
-                        .map(gr -> new Genre(gr.getGenreId(), gr.getName()))
+                        .map(gr -> new Genre(gr.getId(), gr.getName()))
                         .collect(Collectors.toList());
                 System.out.println("Loaded " + genres.size() + " genres from server");
             }
@@ -55,7 +55,7 @@ public class GenreManager {
      */
     public void addGenre(GenreResponse genreResponse) {
         genreResponses.add(genreResponse);
-        genres.add(new Genre(genreResponse.getGenreId(), genreResponse.getName()));
+        genres.add(new Genre(genreResponse.getId(), genreResponse.getName()));
     }
 
     /**
@@ -63,15 +63,7 @@ public class GenreManager {
      */
     public void removeGenre(Long id) {
         genreResponses.removeIf(gr -> gr.getId().equals(id));
-        genres.removeIf(g -> {
-            // Tìm genreResponse tương ứng để lấy genreId
-            for (GenreResponse gr : genreResponses) {
-                if (gr.getId().equals(id)) {
-                    return g.getId().equals(gr.getGenreId());
-                }
-            }
-            return false;
-        });
+        genres.removeIf(g -> g.getId().equals(id));
     }
 
     /**
@@ -81,7 +73,7 @@ public class GenreManager {
         for (int i = 0; i < genreResponses.size(); i++) {
             if (genreResponses.get(i).getId().equals(genreResponse.getId())) {
                 genreResponses.set(i, genreResponse);
-                genres.set(i, new Genre(genreResponse.getGenreId(), genreResponse.getName()));
+                genres.set(i, new Genre(genreResponse.getId(), genreResponse.getName()));
                 break;
             }
         }
