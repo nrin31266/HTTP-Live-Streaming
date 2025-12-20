@@ -17,6 +17,10 @@ public enum BaseErrorCode implements ErrorCode {
     CONFLICT(9008, "Conflict", HttpStatus.CONFLICT),
     UNAUTHENTICATED(9009, "Unauthenticated", HttpStatus.UNAUTHORIZED),
 
+    // 🔹 Genre errors
+    GENRE_NOT_FOUND(9100, "Genre not found", HttpStatus.NOT_FOUND),
+    GENRE_ALREADY_EXISTS(9101, "Genre ID already exists", HttpStatus.CONFLICT),
+
     ;
 
 

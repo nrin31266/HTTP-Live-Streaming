@@ -8,6 +8,7 @@ import raven.modal.Drawer;
 import raven.modal.demo.menu.MyDrawerBuilder;
 import raven.modal.demo.system.FormManager;
 import raven.modal.demo.utils.DemoPreferences;
+import raven.modal.demo.utils.GenreManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -27,6 +28,9 @@ public class ClientDesktopApplication extends JFrame {
         FormManager.install(this);
         setSize(new Dimension(1366, 768));
         setLocationRelativeTo(null);
+        
+        // Load genres khi khởi động
+        new Thread(() -> GenreManager.getInstance().loadGenres()).start();
     }
 
     public static void main(String[] args) {

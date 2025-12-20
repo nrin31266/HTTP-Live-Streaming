@@ -90,7 +90,7 @@ public class Register extends Form {
                 "foreground:#f87171;"); // đỏ nhạt
 
         // Layout
-        registerContent.add(new JLabel("Full Name"), "gapy 25");
+        registerContent.add(new JLabel("Họ Và Tên"), "gapy 25");
         registerContent.add(txtFullName);
 
         registerContent.add(new JLabel("Email"), "gapy 10");

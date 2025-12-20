@@ -1,5 +1,3 @@
-package raven.modal.demo.system.admin;
-
 package raven.modal.demo.system;
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -67,7 +65,7 @@ public class MainFormAdmin extends JPanel {
 
         panel.add(toolBar);
         panel.add(createSearchBox(), "gapx n 135");
-        panel.add(lbAdmin);
+//        panel.add(lbAdmin);
         return panel;
     }
 

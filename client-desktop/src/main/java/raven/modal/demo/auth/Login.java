@@ -100,7 +100,6 @@ public class Login extends Form {
         cmdLogin.addActionListener(e -> {
             String email = txtEmail.getText().trim();
             String password = String.valueOf(txtPassword.getPassword());
-
             // validate đơn giản
             if (email.isEmpty() || password.isEmpty()) {
                 lbError.setText("Vui lòng nhập email và mật khẩu");
@@ -137,7 +136,14 @@ public class Login extends Form {
                         MyDrawerBuilder.getInstance().setUser(user);
 
                         lbError.setText(" "); // clear lỗi
-                        FormManager.login();  // chuyển sang màn chính
+                        System.out.println(user.getRole());
+                        if (user.getRole() == ModelUser.Role.ADMIN) {
+
+                            FormManager.loginAdmin();
+
+                        } else {
+                            FormManager.login();
+                        }
 
                     } catch (InterruptedException | ExecutionException ex) {
                         ex.printStackTrace();

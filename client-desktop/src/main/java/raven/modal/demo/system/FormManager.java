@@ -6,6 +6,7 @@ import raven.modal.component.SimpleModalBorder;
 import raven.modal.demo.auth.Login;
 import raven.modal.demo.component.About;
 import raven.modal.demo.forms.FormDashboard;
+import raven.modal.demo.forms.admin.FormDashboardAdmin;
 import raven.modal.demo.utils.UndoRedo;
 
 import javax.swing.*;
@@ -13,18 +14,46 @@ import javax.swing.*;
 public class FormManager {
 
     protected static final UndoRedo<Form> FORMS = new UndoRedo<>();
+
     private static JFrame frame;
+
     private static MainForm mainForm;
+    private static MainFormAdmin mainFormAdmin;
+
     private static Login login;
+
+    // đang hiển thị MainForm hoặc MainFormAdmin
+    private static JPanel activeMain;
 
     public static void install(JFrame f) {
         frame = f;
-        install();
+        installKeyMap();
         logout();
     }
 
-    private static void install() {
+    private static void installKeyMap() {
+        // cài cho cả 2 để lúc nào cũng dùng được
         FormSearch.getInstance().installKeyMap(getMainForm());
+        FormSearch.getInstance().installKeyMap(getMainFormAdmin());
+    }
+
+    // helper: set form vào đúng main hiện tại
+    private static void setFormToActiveMain(Form form) {
+        if (activeMain instanceof MainForm) {
+            ((MainForm) activeMain).setForm(form);
+            ((MainForm) activeMain).refresh();
+        } else if (activeMain instanceof MainFormAdmin) {
+            ((MainFormAdmin) activeMain).setForm(form);
+            ((MainFormAdmin) activeMain).refresh();
+        }
+    }
+
+    private static void refreshActiveMain() {
+        if (activeMain instanceof MainForm) {
+            ((MainForm) activeMain).refresh();
+        } else if (activeMain instanceof MainFormAdmin) {
+            ((MainFormAdmin) activeMain).refresh();
+        }
     }
 
     public static void showForm(Form form) {
@@ -32,8 +61,7 @@ public class FormManager {
             FORMS.add(form);
             form.formCheck();
             form.formOpen();
-            mainForm.setForm(form);
-            mainForm.refresh();
+            setFormToActiveMain(form);
         }
     }
 
@@ -42,7 +70,7 @@ public class FormManager {
             Form form = FORMS.undo();
             form.formCheck();
             form.formOpen();
-            mainForm.setForm(form);
+            setFormToActiveMain(form);
             Drawer.setSelectedItemClass(form.getClass());
         }
     }
@@ -52,7 +80,7 @@ public class FormManager {
             Form form = FORMS.redo();
             form.formCheck();
             form.formOpen();
-            mainForm.setForm(form);
+            setFormToActiveMain(form);
             Drawer.setSelectedItemClass(form.getClass());
         }
     }
@@ -60,16 +88,46 @@ public class FormManager {
     public static void refresh() {
         if (FORMS.getCurrent() != null) {
             FORMS.getCurrent().formRefresh();
-            mainForm.refresh();
+            refreshActiveMain();
         }
     }
 
+    // login user
     public static void login() {
         Drawer.setVisible(true);
         frame.getContentPane().removeAll();
-        frame.getContentPane().add(getMainForm());
 
+        MainForm mf = getMainForm();
+        activeMain = mf;
+
+        frame.getContentPane().add(mf);
+
+        // clear history khi login để tránh dính form cũ
+        FORMS.clear();
+
+        // mở dashboard user mặc định
         Drawer.setSelectedItemClass(FormDashboard.class);
+
+        frame.repaint();
+        frame.revalidate();
+    }
+
+    // login admin
+    public static void loginAdmin() {
+        Drawer.setVisible(true);
+        frame.getContentPane().removeAll();
+
+        MainFormAdmin mf = getMainFormAdmin();
+        activeMain = mf;
+
+        frame.getContentPane().add(mf);
+
+        // clear history khi login để tránh dính form cũ
+        FORMS.clear();
+
+        // mở dashboard admin mặc định
+        Drawer.setSelectedItemClass(FormDashboardAdmin.class);
+
         frame.repaint();
         frame.revalidate();
     }
@@ -77,22 +135,31 @@ public class FormManager {
     public static void logout() {
         Drawer.setVisible(false);
         frame.getContentPane().removeAll();
-        Form login = getLogin();
-        login.formCheck();
-        frame.getContentPane().add(login);
+
+        Form lg = getLogin();
+        lg.formCheck();
+
+        frame.getContentPane().add(lg);
         FORMS.clear();
+
+        activeMain = null;
+
         frame.repaint();
         frame.revalidate();
     }
 
-    // Rin: show register form
+    // show register form
     public static void showRegister() {
         Drawer.setVisible(false);
         frame.getContentPane().removeAll();
+
         Form register = new raven.modal.demo.auth.Register();
         register.formCheck();
         frame.getContentPane().add(register);
+
         FORMS.clear();
+        activeMain = null;
+
         frame.repaint();
         frame.revalidate();
     }
@@ -108,6 +175,13 @@ public class FormManager {
         return mainForm;
     }
 
+    private static MainFormAdmin getMainFormAdmin() {
+        if (mainFormAdmin == null) {
+            mainFormAdmin = new MainFormAdmin();
+        }
+        return mainFormAdmin;
+    }
+
     private static Login getLogin() {
         if (login == null) {
             login = new Login();
@@ -115,11 +189,9 @@ public class FormManager {
         return login;
     }
 
-
-
-
     public static void showAbout() {
-        ModalDialog.showModal(frame, new SimpleModalBorder(new About(), "About"),
+        ModalDialog.showModal(frame,
+                new SimpleModalBorder(new About(), "About"),
                 ModalDialog.createOption().setAnimationEnabled(false)
         );
     }
