@@ -2,6 +2,7 @@ package raven.modal.demo.forms;
 
 import raven.modal.demo.dto.response.MovieResponse;
 import raven.modal.demo.dto.response.VideoQualityResponse;
+import raven.modal.demo.menu.MyDrawerBuilder;
 import raven.modal.demo.system.Form;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
@@ -16,6 +17,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -80,16 +83,27 @@ public class VideoPlayerForm extends Form {
         this.movieTitle = movie.getTitle();
         this.qualities = new ArrayList<>();
         
+        // Get user email for tracking
+        String userEmail = "Khách";
+        try {
+            var user = MyDrawerBuilder.getInstance().getUser();
+            if (user != null && user.getMail() != null && !user.getMail().isEmpty()) {
+                userEmail = URLEncoder.encode(user.getMail(), "UTF-8");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
         if (movie.getVideoQualities() != null && !movie.getVideoQualities().isEmpty()) {
             for (VideoQualityResponse vq : movie.getVideoQualities()) {
                 String quality = vq.getQuality();
-                String url = "http://localhost:8080/api/hls/" + movie.getId() + "/" + quality + "/playlist.m3u8";
+                String url = "http://localhost:8080/api/hls/" + movie.getId() + "/" + quality + "/playlist.m3u8?userEmail=" + userEmail;
                 qualities.add(new QualityOption(quality, url));
             }
         }
         
         if (qualities.isEmpty() && movie.getMasterPlaylistPath() != null) {
-            String masterUrl = "http://localhost:8080/api/hls/" + movie.getId() + "/master.m3u8";
+            String masterUrl = "http://localhost:8080/api/hls/" + movie.getId() + "/master.m3u8?userEmail=" + userEmail;
             qualities.add(new QualityOption("Auto", masterUrl));
         }
     }

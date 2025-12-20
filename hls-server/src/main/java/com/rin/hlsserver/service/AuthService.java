@@ -6,8 +6,10 @@ import com.rin.hlsserver.dto.response.AuthResponse;
 import com.rin.hlsserver.exception.BaseException;
 import com.rin.hlsserver.model.Role;
 import com.rin.hlsserver.model.User;
+import com.rin.hlsserver.monitor.service.MonitorTrackerService;
 import com.rin.hlsserver.repository.RoleRepository;
 import com.rin.hlsserver.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -56,15 +58,41 @@ public class AuthService {
         return buildAuthResponse(newUser);
     }
 
-    public AuthResponse loginUser(String email, String password) {
-        User user= userRepository.findByEmail(email)
-                .orElseThrow(() -> new BaseException("User not found"));
+    public AuthResponse loginUser(String email, String password, HttpServletRequest request, MonitorTrackerService monitorTracker) {
+        String ip = extractIp(request);
+        
+        try {
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new BaseException("User not found"));
 
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BaseException("Invalid credentials");
+            if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+                monitorTracker.trackLoginFail(email, ip, "Invalid password");
+                throw new BaseException("Invalid credentials");
+            }
+
+            monitorTracker.trackLoginSuccess(email, ip);
+            return buildAuthResponse(user);
+            
+        } catch (BaseException e) {
+            if (e.getMessage().contains("not found")) {
+                monitorTracker.trackLoginFail(email, ip, "User not found");
+            }
+            throw e;
         }
-
-        return buildAuthResponse(user);
+    }
+    
+    private String extractIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip != null ? ip : "unknown";
     }
 
 

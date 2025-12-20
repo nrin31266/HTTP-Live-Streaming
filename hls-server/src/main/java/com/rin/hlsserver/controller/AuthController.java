@@ -4,7 +4,9 @@ import com.rin.hlsserver.dto.request.LoginRequest;
 import com.rin.hlsserver.dto.request.RegisterRequest;
 import com.rin.hlsserver.dto.response.ApiResponse;
 import com.rin.hlsserver.dto.response.AuthResponse;
+import com.rin.hlsserver.monitor.service.MonitorTrackerService;
 import com.rin.hlsserver.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     AuthService authService;
+    MonitorTrackerService monitorTrackerService;
 
     @PostMapping("/register")
     public ApiResponse<AuthResponse> register(@RequestBody RegisterRequest registerRequest) {
@@ -32,11 +35,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(@RequestBody LoginRequest loginRequest) {
+    public ApiResponse<AuthResponse> login(@RequestBody LoginRequest loginRequest, HttpServletRequest request) {
         // Implementation for login endpoint
         return ApiResponse.success(authService.loginUser(
                 loginRequest.getEmail(),
-                loginRequest.getPassword()
+                loginRequest.getPassword(),
+                request,
+                monitorTrackerService
         ));
     }
 

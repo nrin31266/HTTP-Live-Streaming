@@ -3,7 +3,10 @@ package com.rin.hlsserver.controller;
 import com.rin.hlsserver.exception.AppException;
 import com.rin.hlsserver.exception.BaseErrorCode;
 import com.rin.hlsserver.model.Movie;
+import com.rin.hlsserver.monitor.service.MonitorTrackerService;
+import com.rin.hlsserver.monitor.util.JwtHelper;
 import com.rin.hlsserver.repository.MovieRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +28,7 @@ public class HlsStreamingController {
     private static final long CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     
     private final MovieRepository movieRepository;
+    private final MonitorTrackerService monitorTrackerService;
 
     @Value("${app.hls.storage-path:/home/nrin31266/hls-data/videos/hls}")
     private String hlsStoragePath;
@@ -34,7 +38,10 @@ public class HlsStreamingController {
      * Lấy master playlist
      */
     @GetMapping("/{movieId}/master.m3u8")
-    public ResponseEntity<FileSystemResource> getMasterPlaylist(@PathVariable Long movieId) throws IOException {
+    public ResponseEntity<String> getMasterPlaylist(
+            @PathVariable Long movieId,
+            @RequestParam(required = false) String userEmail,
+            HttpServletRequest request) throws IOException {
         log.info("GET /api/hls/{}/master.m3u8", movieId);
         
         Movie movie = movieRepository.findById(movieId)
@@ -48,8 +55,17 @@ public class HlsStreamingController {
         if (!file.exists()) {
             throw new AppException(BaseErrorCode.FILE_NOT_FOUND);
         }
+        
+        // Track master playlist request
+        String email = (userEmail != null && !userEmail.isEmpty()) ? userEmail : JwtHelper.extractEmailFromRequest(request);
+        monitorTrackerService.trackMasterPlaylist(request, email, String.valueOf(movieId));
 
-        FileSystemResource resource = new FileSystemResource(file);
+        // Read and modify master playlist to add userEmail to variant playlists
+        String playlistContent = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+        if (userEmail != null && !userEmail.isEmpty()) {
+            // Add userEmail parameter to each variant playlist
+            playlistContent = playlistContent.replaceAll("(\\d+p/playlist\\.m3u8)", "$1?userEmail=" + userEmail);
+        }
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"));
@@ -58,8 +74,7 @@ public class HlsStreamingController {
         
         return ResponseEntity.ok()
                 .headers(headers)
-                .contentLength(resource.contentLength())
-                .body(resource);
+                .body(playlistContent);
     }
 
     /**
@@ -67,9 +82,11 @@ public class HlsStreamingController {
      * Lấy quality playlist (360p hoặc 720p)
      */
     @GetMapping("/{movieId}/{quality}/playlist.m3u8")
-    public ResponseEntity<FileSystemResource> getQualityPlaylist(
+    public ResponseEntity<String> getQualityPlaylist(
             @PathVariable Long movieId,
-            @PathVariable String quality) throws IOException {
+            @PathVariable String quality,
+            @RequestParam(required = false) String userEmail,
+            HttpServletRequest request) throws IOException {
         
         log.info("GET /api/hls/{}/{}/playlist.m3u8", movieId, quality);
         
@@ -86,8 +103,17 @@ public class HlsStreamingController {
         if (!file.exists()) {
             throw new AppException(BaseErrorCode.QUALITY_NOT_FOUND);
         }
+        
+        // Track playlist request and update online session
+        String email = (userEmail != null && !userEmail.isEmpty()) ? userEmail : JwtHelper.extractEmailFromRequest(request);
+        monitorTrackerService.trackPlaylist(request, email, String.valueOf(movieId), quality);
 
-        FileSystemResource resource = new FileSystemResource(file);
+        // Read and modify playlist content to add userEmail to segment URLs
+        String playlistContent = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+        if (userEmail != null && !userEmail.isEmpty()) {
+            // Add userEmail parameter to each .ts segment
+            playlistContent = playlistContent.replaceAll("(segment_\\d+\\.ts)", "$1?userEmail=" + userEmail);
+        }
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"));
@@ -96,8 +122,7 @@ public class HlsStreamingController {
         
         return ResponseEntity.ok()
                 .headers(headers)
-                .contentLength(resource.contentLength())
-                .body(resource);
+                .body(playlistContent);
     }
 
     /**
@@ -109,7 +134,9 @@ public class HlsStreamingController {
             @PathVariable Long movieId,
             @PathVariable String quality,
             @PathVariable String segmentName,
-            @RequestHeader(value = "Range", required = false) String range) throws IOException {
+            @RequestParam(required = false) String userEmail,
+            @RequestHeader(value = "Range", required = false) String range,
+            HttpServletRequest request) throws IOException {
         
         log.info("GET /api/hls/{}/{}/{}", movieId, quality, segmentName);
         
@@ -131,6 +158,10 @@ public class HlsStreamingController {
         if (!file.exists()) {
             throw new AppException(BaseErrorCode.SEGMENT_NOT_FOUND);
         }
+        
+        // Track segment request and update online session
+        String email = (userEmail != null && !userEmail.isEmpty()) ? userEmail : JwtHelper.extractEmailFromRequest(request);
+        monitorTrackerService.trackSegment(request, email, String.valueOf(movieId), quality, segmentName);
 
         FileSystemResource resource = new FileSystemResource(file);
         long fileLength = resource.contentLength();

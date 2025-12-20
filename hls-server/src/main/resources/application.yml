@@ -15,9 +15,16 @@ server:
   port: 8080
   servlet:
         context-path: /
+        
 app:
   jwt:
     signerKey: HDKdDVDEpABtpunTzN2QM2pbmVzDP5jht6WGykegNKgsKDVdDlbzFVmU1vDOVOHV
+  hls:
+    storage-path: /home/nrin31266/hls-data/videos/hls
+
+monitor:
+  online:
+    timeoutSeconds: 15
   hls:
     storage-path: /home/nrin31266/hls-data/videos/hls
   ffmpeg:
