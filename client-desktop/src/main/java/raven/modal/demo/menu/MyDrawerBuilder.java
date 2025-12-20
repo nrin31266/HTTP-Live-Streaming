@@ -161,26 +161,10 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
 
     private MenuItem[] createUserMenus() {
         return new MenuItem[]{
-                new Item.Label("MAIN"),
-                new Item("Dashboard", "dashboard.svg", FormDashboard.class),
-
-                new Item.Label("SWING UI"),
-                new Item("Forms", "forms.svg")
-                        .subMenu("Input", FormInput.class)
-                        .subMenu("Table", FormTable.class)
-                        .subMenu("Responsive Layout", FormResponsiveLayout.class),
-
-                new Item("Components", "components.svg")
-                        .subMenu("Modal", FormModal.class)
-                        .subMenu("Toast", FormToast.class)
-                        .subMenu("Date Time", FormDateTime.class)
-                        .subMenu("Color Picker", FormColorPicker.class)
-                        .subMenu("Avatar Icon", FormAvatarIcon.class)
-                        .subMenu("Slide Pane", FormSlidePane.class),
-
-                new Item("Swing Pack", "pack.svg")
-                        .subMenu("Pagination", FormPagination.class)
-                        .subMenu("MultiSelect", FormMultiSelect.class),
+                new Item.Label("PHIM"),
+                new Item("Trang chủ", "dashboard.svg", FormDashboard.class),
+                new Item("Tất cả phim", "forms.svg", FormAllMovies.class),
+                new Item("Thể loại", "components.svg", FormGenres.class),
 
                 new Item.Label("OTHER"),
                 new Item("Setting", "setting.svg", FormSetting.class),
@@ -192,9 +176,9 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
     private MenuItem[] createAdminMenus() {
         return new MenuItem[]{
                 new Item.Label("ADMIN"),
-                new Item("Dashboard", "dashboard.svg", FormDashboardAdmin.class),
-                new Item("Movie Management", "forms.svg", FormMovieManagement.class),
-                new Item("Genre Management", "forms.svg", FormGenreManagement.class),
+                new Item("Trang chủ", "dashboard.svg", FormDashboardAdmin.class),
+                new Item("Quản lý phim", "forms.svg", FormMovieManagement.class),
+                new Item("Quản lý thể loại", "forms.svg", FormGenreManagement.class),
 
                 // Bạn thêm form admin khác ở đây (nếu có)
                 // new Item("User Management", "forms.svg", FormUserManagement.class),

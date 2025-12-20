@@ -26,6 +26,15 @@ public enum BaseErrorCode implements ErrorCode {
     MOVIE_ALREADY_EXISTS(9201, "Movie already exists", HttpStatus.CONFLICT),
     MOVIE_PROCESSING(9202, "Movie is currently being processed", HttpStatus.CONFLICT),
 
+    // 🔹 HLS Streaming errors
+    VIDEO_NOT_PROCESSED(9300, "Video has not been processed yet", HttpStatus.NOT_FOUND),
+    QUALITY_NOT_FOUND(9301, "Video quality not found", HttpStatus.NOT_FOUND),
+    SEGMENT_NOT_FOUND(9302, "Video segment not found", HttpStatus.NOT_FOUND),
+    INVALID_QUALITY(9303, "Invalid video quality (use 360p or 720p)", HttpStatus.BAD_REQUEST),
+    INVALID_SEGMENT(9304, "Invalid segment name format", HttpStatus.BAD_REQUEST),
+    FILE_NOT_READABLE(9305, "File exists but cannot be read", HttpStatus.INTERNAL_SERVER_ERROR),
+    FILE_NOT_FOUND(9306, "File not found", HttpStatus.NOT_FOUND),
+
     ;
 
 
