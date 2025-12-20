@@ -35,6 +35,12 @@ public enum BaseErrorCode implements ErrorCode {
     FILE_NOT_READABLE(9305, "File exists but cannot be read", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_NOT_FOUND(9306, "File not found", HttpStatus.NOT_FOUND),
 
+    // 🔹 User errors
+    USER_NOT_FOUND(9400, "User not found", HttpStatus.NOT_FOUND),
+
+    // 🔹 Favorite errors
+    FAVORITE_ALREADY_EXISTS(9500, "Movie is already in favorites", HttpStatus.CONFLICT),
+    FAVORITE_NOT_FOUND(9501, "Favorite not found", HttpStatus.NOT_FOUND)
     ;
 
 

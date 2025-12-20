@@ -2,7 +2,12 @@ package raven.modal.demo.forms;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import raven.modal.Toast;
+import raven.modal.demo.api.FavoriteApi;
+import raven.modal.demo.api.WatchHistoryApi;
+import raven.modal.demo.dto.response.ApiResponse;
 import raven.modal.demo.dto.response.MovieResponse;
+import raven.modal.demo.menu.MyDrawerBuilder;
 import raven.modal.demo.system.Form;
 
 import javax.imageio.ImageIO;
@@ -18,10 +23,21 @@ public class FormMovieDetail extends Form {
     private final MovieResponse movie;
     private ImageIcon movieImageIcon;
     private JLabel imageLabel;
+    private JButton favoriteButton;
+    private boolean isFavorited = false;
+    
+    private Long getCurrentUserId() {
+        var user = MyDrawerBuilder.getInstance().getUser();
+        return user != null ? user.getUserId() : 1L;
+    }
     
     public FormMovieDetail(MovieResponse movie) {
         this.movie = movie;
         init();
+        // Lưu lịch sử xem khi mở chi tiết phim
+        saveWatchHistory();
+        // Kiểm tra trạng thái yêu thích
+        checkFavoriteStatus();
     }
     
     private void init() {
@@ -110,11 +126,11 @@ public class FormMovieDetail extends Form {
         // Action buttons
         JPanel buttonPanel = new JPanel(new MigLayout("insets 20 0 0 0", "[grow,right][]10[]"));
         
-        // Favorite button (placeholder for now)
-        JButton favoriteButton = new JButton("❤ Yêu thích");
+        // Favorite button
+        favoriteButton = new JButton(isFavorited ? "💖 Đã yêu thích" : "🤍 Yêu thích");
         favoriteButton.putClientProperty(FlatClientProperties.STYLE, 
             "borderWidth:1;focusWidth:1;arc:10");
-        favoriteButton.setEnabled(false); // Will be implemented later
+        favoriteButton.addActionListener(e -> toggleFavorite());
         buttonPanel.add(favoriteButton);
         
         // Watch button
@@ -236,5 +252,88 @@ public class FormMovieDetail extends Form {
         };
         
         worker.execute();
+    }
+    
+    private void saveWatchHistory() {
+        // Lưu lịch sử xem trong background
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() {
+                try {
+                    WatchHistoryApi.addOrUpdateWatchHistory(getCurrentUserId(), movie.getId());
+                    System.out.println("Watch history saved for movie: " + movie.getTitle());
+                } catch (Exception e) {
+                    System.err.println("Error saving watch history: " + e.getMessage());
+                }
+                return null;
+            }
+        }.execute();
+    }
+    
+    private void checkFavoriteStatus() {
+        new SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() {
+                try {
+                    ApiResponse<Boolean> response = FavoriteApi.checkFavorite(getCurrentUserId(), movie.getId());
+                    return response != null && response.getCode() == 200 && Boolean.TRUE.equals(response.getResult());
+                } catch (Exception e) {
+                    System.err.println("Error checking favorite status: " + e.getMessage());
+                    return false;
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    isFavorited = get();
+                    if (favoriteButton != null) {
+                        updateFavoriteButton();
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error updating favorite button: " + e.getMessage());
+                }
+            }
+        }.execute();
+    }
+    
+    private void toggleFavorite() {
+        favoriteButton.setEnabled(false);
+        
+        new SwingWorker<ApiResponse<?>, Void>() {
+            @Override
+            protected ApiResponse<?> doInBackground() {
+                if (isFavorited) {
+                    return FavoriteApi.removeFavorite(getCurrentUserId(), movie.getId());
+                } else {
+                    return FavoriteApi.addFavorite(getCurrentUserId(), movie.getId());
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ApiResponse<?> response = get();
+                    if (response != null && response.getCode() == 200) {
+                        isFavorited = !isFavorited;
+                        updateFavoriteButton();
+                        Toast.show(FormMovieDetail.this, Toast.Type.SUCCESS, 
+                                isFavorited ? "Đã thêm vào yêu thích" : "Đã xóa khỏi yêu thích");
+                    } else {
+                        Toast.show(FormMovieDetail.this, Toast.Type.ERROR, 
+                                "Lỗi: " + (response != null ? response.getMessage() : "Unknown"));
+                    }
+                } catch (Exception e) {
+                    Toast.show(FormMovieDetail.this, Toast.Type.ERROR, "Lỗi: " + e.getMessage());
+                    e.printStackTrace();
+                } finally {
+                    favoriteButton.setEnabled(true);
+                }
+            }
+        }.execute();
+    }
+    
+    private void updateFavoriteButton() {
+        favoriteButton.setText(isFavorited ? "💖 Đã yêu thích" : "🤍 Yêu thích");
     }
 }

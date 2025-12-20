@@ -165,6 +165,8 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 new Item("Trang chủ", "dashboard.svg", FormDashboard.class),
                 new Item("Tất cả phim", "forms.svg", FormAllMovies.class),
                 new Item("Thể loại", "components.svg", FormGenres.class),
+                new Item("Lịch sử xem", "clock.svg", FormWatchHistory.class),
+                new Item("Yêu thích", "heart.svg", FormFavoriteMovies.class),
 
                 new Item.Label("OTHER"),
                 new Item("Setting", "setting.svg", FormSetting.class),

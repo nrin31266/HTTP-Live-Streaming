@@ -2,6 +2,14 @@ package raven.modal.demo.model;
 
 public class ModelUser {
 
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
     public String getUserName() {
         return userName;
     }
@@ -26,12 +34,14 @@ public class ModelUser {
         this.role = role;
     }
 
-    public ModelUser(String userName, String mail, Role role) {
+    public ModelUser(Long userId, String userName, String mail, Role role) {
+        this.userId = userId;
         this.userName = userName;
         this.mail = mail;
         this.role = role;
     }
 
+    private Long userId;
     private String userName;
     private String mail;
     private Role role;

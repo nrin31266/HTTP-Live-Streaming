@@ -163,6 +163,7 @@ public class Login extends Form {
         }
 
         return new ModelUser(
+                auth.getId(),
                 auth.getFullName(),
                 auth.getEmail(),
                 role
