@@ -15,6 +15,8 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
     
     List<Movie> findByStatus(Movie.MovieStatus status);
     
+    List<Movie> findByTitleContainingIgnoreCaseAndStatus(String title, Movie.MovieStatus status);
+    
     List<Movie> findByGenre_GenreId(String genreId);
     
     @Query("SELECT m FROM Movie m WHERE m.status = 'PROCESSING'")

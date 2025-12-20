@@ -4,7 +4,9 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
 import raven.modal.Drawer;
+import raven.modal.ModalDialog;
 import raven.modal.demo.ClientDesktopApplication;
+import raven.modal.demo.component.EmptyModalBorder;
 import raven.modal.demo.component.FormSearchButton;
 import raven.modal.demo.component.MemoryBar;
 import raven.modal.demo.component.RefreshLine;
@@ -103,9 +105,25 @@ public class MainForm extends JPanel {
     private JPanel createSearchBox() {
         JPanel panel = new JPanel(new MigLayout("fill", "[fill,center,200:250:]", "[fill]"));
         FormSearchButton button = new FormSearchButton();
-        button.addActionListener(e -> FormSearch.getInstance().showSearch());
+        button.addActionListener(e -> showMovieSearch());
         panel.add(button);
         return panel;
+    }
+
+    private void showMovieSearch() {
+        if (ModalDialog.isIdExist("movieSearch")) {
+            return;
+        }
+        raven.modal.option.Option option = ModalDialog.createOption();
+        option.setAnimationEnabled(false);
+        option.getLayoutOption().setMargin(20, 10, 10, 10).setLocation(raven.modal.option.Location.CENTER, raven.modal.option.Location.TOP);
+        
+        raven.modal.demo.component.MovieSearchPanel searchPanel = new raven.modal.demo.component.MovieSearchPanel();
+        ModalDialog.showModal(FormManager.getFrame(), new EmptyModalBorder(searchPanel, (controller, action) -> {
+            if (action == EmptyModalBorder.OPENED) {
+                searchPanel.searchGrabFocus();
+            }
+        }), option, "movieSearch");
     }
 
     private JPanel createRefreshLine() {

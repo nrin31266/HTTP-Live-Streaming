@@ -48,6 +48,15 @@ public class MovieService {
     }
     
     /**
+     * Tìm kiếm movies theo tên (chỉ lấy status PUBLISHED)
+     */
+    public List<MovieResponse> searchMovies(String keyword) {
+        return movieRepository.findByTitleContainingIgnoreCaseAndStatus(keyword, Movie.MovieStatus.PUBLISHED).stream()
+                .map(MovieResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    /**
      * Lấy movie theo ID
      */
     public MovieResponse getMovieById(Long id) {

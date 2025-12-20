@@ -19,6 +19,17 @@ public class MovieApi {
         }
     }
 
+    public static ApiResponse<List<MovieResponse>> searchMovies(String keyword) {
+        try {
+            String path = "/movies/search?keyword=" + java.net.URLEncoder.encode(keyword, "UTF-8");
+            TypeReference<ApiResponse<List<MovieResponse>>> type = new TypeReference<>() {};
+            return Http.get(path, type);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ApiResponse<>("Lỗi kết nối: " + e.getMessage(), null, 500);
+        }
+    }
+
     public static ApiResponse<MovieResponse> getMovieById(Long id) {
         try {
             TypeReference<ApiResponse<MovieResponse>> type = new TypeReference<>() {};

@@ -31,6 +31,17 @@ public class MovieController {
                 .build();
     }
     
+    @GetMapping("/search")
+    public ApiResponse<List<MovieResponse>> searchMovies(@RequestParam String keyword) {
+        log.info("GET /api/movies/search?keyword={} - Search movies", keyword);
+        List<MovieResponse> movies = movieService.searchMovies(keyword);
+        return ApiResponse.<List<MovieResponse>>builder()
+                .code(HttpStatus.OK.value())
+                .message("Search movies successfully")
+                .result(movies)
+                .build();
+    }
+    
     @GetMapping("/{id}")
     public ApiResponse<MovieResponse> getMovieById(@PathVariable Long id) {
         log.info("GET /api/movies/{} - Get movie by ID", id);
