@@ -133,11 +133,19 @@ public class FormMovieDetail extends Form {
         }
         
         watchButton.addActionListener(e -> {
-            // TODO: Open video player
-            JOptionPane.showMessageDialog(this, 
-                "Chức năng xem phim sẽ được triển khai sau!", 
-                "Thông báo", 
-                JOptionPane.INFORMATION_MESSAGE);
+            System.out.println("Watch button clicked for movie: " + movie.getTitle());
+            try {
+                VideoPlayerForm playerForm = new VideoPlayerForm();
+                playerForm.setMovie(movie);
+                raven.modal.demo.system.FormManager.showForm(playerForm);
+            } catch (Exception ex) {
+                System.err.println("Error opening video player: " + ex.getMessage());
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, 
+                    "Lỗi mở video player: " + ex.getMessage(), 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
         });
         
         buttonPanel.add(watchButton);

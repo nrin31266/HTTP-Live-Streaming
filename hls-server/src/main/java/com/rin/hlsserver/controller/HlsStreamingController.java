@@ -1,38 +1,64 @@
 package com.rin.hlsserver.controller;
 
-import com.rin.hlsserver.service.HlsStreamingService;
+import com.rin.hlsserver.exception.AppException;
+import com.rin.hlsserver.exception.BaseErrorCode;
+import com.rin.hlsserver.model.Movie;
+import com.rin.hlsserver.repository.MovieRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.support.ResourceRegion;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/api/hls")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class HlsStreamingController {
 
-    private final HlsStreamingService hlsStreamingService;
+    private static final long CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+    
+    private final MovieRepository movieRepository;
+
+    @Value("${app.hls.storage-path:/home/nrin31266/hls-data/videos/hls}")
+    private String hlsStoragePath;
 
     /**
      * GET /api/hls/{movieId}/master.m3u8
      * Lấy master playlist
      */
     @GetMapping("/{movieId}/master.m3u8")
-    public ResponseEntity<Resource> getMasterPlaylist(@PathVariable Long movieId) {
+    public ResponseEntity<FileSystemResource> getMasterPlaylist(@PathVariable Long movieId) throws IOException {
         log.info("GET /api/hls/{}/master.m3u8", movieId);
         
-        Resource resource = hlsStreamingService.getMasterPlaylist(movieId);
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new AppException(BaseErrorCode.MOVIE_NOT_FOUND));
+
+        if (movie.getMasterPlaylistPath() == null) {
+            throw new AppException(BaseErrorCode.VIDEO_NOT_PROCESSED);
+        }
+
+        File file = new File(movie.getMasterPlaylistPath());
+        if (!file.exists()) {
+            throw new AppException(BaseErrorCode.FILE_NOT_FOUND);
+        }
+
+        FileSystemResource resource = new FileSystemResource(file);
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"));
+        headers.setCacheControl(CacheControl.noCache());
+        headers.set("Accept-Ranges", "bytes");
         
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"master.m3u8\"")
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .headers(headers)
+                .contentLength(resource.contentLength())
                 .body(resource);
     }
 
@@ -41,41 +67,104 @@ public class HlsStreamingController {
      * Lấy quality playlist (360p hoặc 720p)
      */
     @GetMapping("/{movieId}/{quality}/playlist.m3u8")
-    public ResponseEntity<Resource> getQualityPlaylist(
+    public ResponseEntity<FileSystemResource> getQualityPlaylist(
             @PathVariable Long movieId,
-            @PathVariable String quality) {
+            @PathVariable String quality) throws IOException {
         
         log.info("GET /api/hls/{}/{}/playlist.m3u8", movieId, quality);
         
-        Resource resource = hlsStreamingService.getQualityPlaylist(movieId, quality);
+        // Validate quality
+        if (!quality.equals("360p") && !quality.equals("720p")) {
+            throw new AppException(BaseErrorCode.INVALID_QUALITY);
+        }
+        
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new AppException(BaseErrorCode.MOVIE_NOT_FOUND));
+
+        File file = new File(hlsStoragePath + "/" + movieId + "/" + quality + "/playlist.m3u8");
+        
+        if (!file.exists()) {
+            throw new AppException(BaseErrorCode.QUALITY_NOT_FOUND);
+        }
+
+        FileSystemResource resource = new FileSystemResource(file);
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"));
+        headers.setCacheControl(CacheControl.noCache());
+        headers.set("Accept-Ranges", "bytes");
         
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.apple.mpegurl"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, String.format("inline; filename=\"%s_playlist.m3u8\"", quality))
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .headers(headers)
+                .contentLength(resource.contentLength())
                 .body(resource);
     }
 
     /**
      * GET /api/hls/{movieId}/{quality}/{segmentName}
-     * Lấy video segment (.ts file)
+     * Lấy video segment (.ts file) với Range request support
      */
     @GetMapping("/{movieId}/{quality}/{segmentName:.+\\.ts}")
-    public ResponseEntity<Resource> getSegment(
+    public ResponseEntity<?> getSegment(
             @PathVariable Long movieId,
             @PathVariable String quality,
-            @PathVariable String segmentName) {
+            @PathVariable String segmentName,
+            @RequestHeader(value = "Range", required = false) String range) throws IOException {
         
         log.info("GET /api/hls/{}/{}/{}", movieId, quality, segmentName);
         
-        Resource resource = hlsStreamingService.getSegment(movieId, quality, segmentName);
+        // Validate quality
+        if (!quality.equals("360p") && !quality.equals("720p")) {
+            throw new AppException(BaseErrorCode.INVALID_QUALITY);
+        }
         
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("video/mp2t"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, String.format("inline; filename=\"%s\"", segmentName))
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000") // Cache segments 1 year
-                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .body(resource);
+        // Validate segment name format (segment_XXX.ts)
+        if (!segmentName.matches("segment_\\d{3}\\.ts")) {
+            throw new AppException(BaseErrorCode.INVALID_SEGMENT);
+        }
+        
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new AppException(BaseErrorCode.MOVIE_NOT_FOUND));
+
+        File file = new File(hlsStoragePath + "/" + movieId + "/" + quality + "/" + segmentName);
+        
+        if (!file.exists()) {
+            throw new AppException(BaseErrorCode.SEGMENT_NOT_FOUND);
+        }
+
+        FileSystemResource resource = new FileSystemResource(file);
+        long fileLength = resource.contentLength();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("video/mp2t"));
+        headers.setCacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic());
+        headers.set("Accept-Ranges", "bytes");
+
+        // Handle range requests for better streaming
+        if (range == null || range.isEmpty()) {
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(fileLength)
+                    .body(resource);
+        }
+
+        // Parse range header
+        long start = 0;
+        try {
+            String[] parts = range.replace("bytes=", "").split("-");
+            start = Long.parseLong(parts[0]);
+        } catch (Exception e) {
+            log.warn("Invalid range header: {}", range);
+        }
+
+        long end = Math.min(start + CHUNK_SIZE - 1, fileLength - 1);
+        HttpRange httpRange = HttpRange.createByteRange(start, end);
+        ResourceRegion region = new ResourceRegion(resource, start, end - start + 1);
+
+        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .headers(headers)
+                .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + fileLength)
+                .body(region);
     }
 
     /**
@@ -86,7 +175,11 @@ public class HlsStreamingController {
     public ResponseEntity<Boolean> checkMovieReady(@PathVariable Long movieId) {
         log.info("GET /api/hls/{}/ready", movieId);
         
-        boolean ready = hlsStreamingService.isMovieReady(movieId);
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new AppException(BaseErrorCode.MOVIE_NOT_FOUND));
+        
+        boolean ready = movie.getStatus() == Movie.MovieStatus.PUBLISHED && 
+                       movie.getMasterPlaylistPath() != null;
         
         return ResponseEntity.ok(ready);
     }

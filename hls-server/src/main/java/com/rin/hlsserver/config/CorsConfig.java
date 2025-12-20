@@ -14,10 +14,8 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow credentials (cookies/authorization headers)
-        config.setAllowCredentials(true);
-
-        // If you want to allow all origins in LAN/testing, use pattern instead:
+        // Allow all origins without credentials for HLS streaming
+        config.setAllowCredentials(false);
         config.setAllowedOriginPatterns(List.of("*"));
 
         config.setAllowedMethods(List.of(
@@ -29,15 +27,21 @@ public class CorsConfig {
                 "Content-Type",
                 "Accept",
                 "Authorization",
-                "X-Requested-With"
+                "X-Requested-With",
+                "Range"
         ));
 
         config.setExposedHeaders(List.of(
-                "Authorization"
+                "Authorization",
+                "Content-Range",
+                "Accept-Ranges",
+                "Content-Length",
+                "Content-Type"
         ));
+        
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply CORS to all endpoints
         source.registerCorsConfiguration("/**", config);
 
         return new CorsFilter(source);

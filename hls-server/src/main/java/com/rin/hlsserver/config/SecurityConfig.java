@@ -39,6 +39,10 @@ public class SecurityConfig {
                         request.anyRequest().permitAll()
                 )
                 .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for simplicity
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.disable()) // Allow embedding for video player
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self' 'unsafe-inline' 'unsafe-eval' *"))
+                )
         ;
 
         return httpSecurity.build();
