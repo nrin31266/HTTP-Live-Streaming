@@ -6,6 +6,7 @@ import com.rin.hlsserver.dto.response.AuthResponse;
 import com.rin.hlsserver.exception.BaseException;
 import com.rin.hlsserver.model.Role;
 import com.rin.hlsserver.model.User;
+import com.rin.hlsserver.model.UserStatus;
 import com.rin.hlsserver.monitor.service.MonitorTrackerService;
 import com.rin.hlsserver.repository.RoleRepository;
 import com.rin.hlsserver.repository.UserRepository;
@@ -50,6 +51,7 @@ public class AuthService {
                 .email(email)
                 .passwordHash(passwordEncoder.encode(password))
                 .fullName(fullName)
+                .status(UserStatus.ACTIVE)
                 .roles(Set.of(defaultRole))
                 .build();
 
@@ -68,6 +70,12 @@ public class AuthService {
             if (!passwordEncoder.matches(password, user.getPasswordHash())) {
                 monitorTracker.trackLoginFail(email, ip, "Invalid password");
                 throw new BaseException("Invalid credentials");
+            }
+
+            // Check if user is banned
+            if (user.getStatus() == com.rin.hlsserver.model.UserStatus.BANNED) {
+                monitorTracker.trackLoginFail(email, ip, "Account is banned");
+                throw new BaseException("Your account has been banned. Please contact administrator.");
             }
 
             monitorTracker.trackLoginSuccess(email, ip);

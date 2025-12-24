@@ -37,6 +37,10 @@ public class User {
     @ManyToMany
     Set<Role> roles;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    UserStatus status = UserStatus.ACTIVE;
 
     @CreationTimestamp
     LocalDateTime createdAt;

@@ -180,6 +180,7 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 new Item("Trang chủ", "dashboard.svg", FormDashboardAdmin.class),
                 new Item("Quản lý phim", "forms.svg", FormMovieManagement.class),
                 new Item("Quản lý thể loại", "forms.svg", FormGenreManagement.class),
+                new Item("Quản lý người dùng", "forms.svg", raven.modal.demo.forms.admin.FormUserManagement.class),
 
                 // Bạn thêm form admin khác ở đây (nếu có)
                 // new Item("User Management", "forms.svg", FormUserManagement.class),
